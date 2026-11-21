@@ -1,0 +1,15 @@
+body {
+  background-color: #F3F4F6;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+}
+.leaflet-container {
+  font-family: inherit;
+  z-index: 10;
+}
+.active-order-card {
+  background: linear-gradient(135deg, #0F172A 0%, #1E293B 60%, #1D4ED8 100%);
+}
+.wallet-card {
+  background: linear-gradient(135deg, #111827 0%, #1E293B 65%, #065F46 100%);
+}

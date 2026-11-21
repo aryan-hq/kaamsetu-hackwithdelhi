@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="ksGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1D4ED8"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="archGrad" x1="12" y1="42" x2="52" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#34D399"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#ksGrad)"/>
+  <!-- Bridge / Setu Arch -->
+  <path d="M12 43C15.5 28 23.5 21 32 21C40.5 21 48.5 28 52 43" stroke="url(#archGrad)" stroke-width="5.5" stroke-linecap="round"/>
+  <!-- Bridge Deck -->
+  <path d="M10 43H54" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
+  <!-- Support Pillars -->
+  <path d="M22 27V43M42 27V43" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
+  <!-- Connection Spark / Location Pin Dot -->
+  <circle cx="32" cy="14" r="3.5" fill="#34D399"/>
+</svg>
