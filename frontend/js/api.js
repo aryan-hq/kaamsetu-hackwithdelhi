@@ -35,6 +35,14 @@ KS.loadMeta = async function () {
     const el = document.getElementById(id);
     if (el) el.innerHTML = areaOptions;
   });
+  ["emp-skill", "prof-skill", "edit-prof-skill"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = skillOptions;
+  });
+  ["emp-area", "prof-area", "edit-prof-area"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = areaOptions;
+  });
 };
 
 KS.speak = async function (text) {

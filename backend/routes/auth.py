@@ -136,6 +136,13 @@ def save_profile_and_kyc(user_id: int):
         if not live_face_captured:
             conn.close()
             return jsonify({"error": "Please capture a live selfie to match your face with your ID."}), 400
+        # Prevent changing name once profile is already created
+        if row["profile_completed"] == 1 and row["name"]:
+            name = row["name"]
+        face_score = int(data.get("face_match_score", 0) or 0)
+        if face_score < 50:
+            conn.close()
+            return jsonify({"error": "Face mismatch! Live selfie must match the ID photo."}), 400
 
         # Store only one-way SHA-256 hash — never raw ID digits
         kyc_hash = hashlib.sha256((id_number or f"doc_{user_id}").encode("utf-8")).hexdigest()

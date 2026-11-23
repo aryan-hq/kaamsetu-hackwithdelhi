@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KaamSetu — Verified Hyper-Local Work & Escrow</title>
+  <title>Shramvani — Verified Hyper-Local Work & Escrow</title>
   <link rel="icon" type="image/svg+xml" href="/assets/logo.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js"></script>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body class="min-h-screen font-['Plus_Jakarta_Sans','Noto_Sans_Devanagari',sans-serif]">
@@ -19,9 +20,9 @@
     <div class="w-full max-w-md bg-white rounded-3xl p-6 shadow-xl border border-slate-200/80">
       <div class="flex items-center justify-between mb-5">
         <div class="flex items-center gap-3">
-          <img src="/assets/logo.svg" alt="KaamSetu Logo" class="w-11 h-11 rounded-2xl shadow-sm" />
+          <img src="/assets/logo.svg" alt="Shramvani Logo" class="w-11 h-11 rounded-2xl shadow-sm" />
           <div>
-            <h1 class="text-xl font-extrabold text-slate-900 leading-none">KaamSetu</h1>
+            <h1 class="text-xl font-extrabold text-slate-900 leading-none">Shramvani</h1>
             <p data-i18n="tagline" class="text-[11px] text-slate-500 mt-1">Verified local work with Escrow protection</p>
           </div>
         </div>
@@ -80,10 +81,10 @@
     <div class="w-full max-w-md bg-white rounded-3xl p-6 shadow-xl border border-slate-200/80">
       <div class="flex items-center justify-between gap-3 mb-4">
         <div class="flex items-center gap-3">
-          <img src="/assets/logo.svg" alt="KaamSetu" class="w-10 h-10 rounded-xl" />
+          <img src="/assets/logo.svg" alt="Shramvani" class="w-10 h-10 rounded-xl" />
           <div>
             <h2 id="prof-role-label" class="text-base font-extrabold text-slate-900 leading-none">Complete Profile & KYC</h2>
-            <p class="text-[11px] text-slate-500 mt-1">Identity verification keeps KaamSetu safe</p>
+            <p class="text-[11px] text-slate-500 mt-1">Identity verification keeps Shramvani safe</p>
           </div>
         </div>
         <button type="button" onclick="KS.logout()"
@@ -148,7 +149,7 @@
     <header class="bg-white border-b border-slate-200 sticky top-0 z-30">
       <div class="max-w-md mx-auto px-4 h-16 flex items-center justify-between gap-2">
         <div class="flex items-center gap-2.5 min-w-0">
-          <img src="/assets/logo.svg" alt="KaamSetu" class="w-9 h-9 rounded-xl shrink-0" />
+          <img src="/assets/logo.svg" alt="Shramvani" class="w-9 h-9 rounded-xl shrink-0" />
           <div class="truncate">
             <p id="header-user-name" class="text-sm font-extrabold text-slate-900 leading-none truncate">User</p>
             <p id="header-user-badge" class="text-[10px] font-semibold text-blue-600 mt-0.5 truncate">Verified</p>
@@ -173,14 +174,14 @@
       <div id="worker-nav" class="hidden grid grid-cols-3 p-1 bg-slate-200/70 rounded-2xl mb-5 gap-1">
         <button id="nav-worker-jobs" onclick="KS.switchPortalView('worker-jobs')" data-i18n="my_jobs" class="py-2 rounded-xl text-xs font-bold bg-white text-slate-900 shadow-sm">My Jobs</button>
         <button id="nav-wallet-w" onclick="KS.switchPortalView('wallet')" data-i18n="wallet" class="py-2 rounded-xl text-xs font-semibold text-slate-600">Wallet</button>
-        <button onclick="KS.openProfileOnboarding(KS.user)" data-i18n="profile" class="py-2 rounded-xl text-xs font-semibold text-slate-600">Profile</button>
+        <button id="nav-profile-w" onclick="KS.switchPortalView('profile')" data-i18n="profile" class="py-2 rounded-xl text-xs font-semibold text-slate-600">Profile</button>
       </div>
 
       <div id="employer-nav" class="hidden grid grid-cols-4 p-1 bg-slate-200/70 rounded-2xl mb-5 gap-1">
         <button id="nav-employer-dashboard" onclick="KS.switchPortalView('employer-dashboard')" data-i18n="dashboard" class="py-2 rounded-xl text-xs font-bold bg-white text-slate-900 shadow-sm">Dashboard</button>
         <button id="nav-employer-post" onclick="KS.switchPortalView('employer-post')" data-i18n="post_job" class="py-2 rounded-xl text-xs font-semibold text-slate-600">Post Job</button>
         <button id="nav-wallet-e" onclick="KS.switchPortalView('wallet')" data-i18n="wallet" class="py-2 rounded-xl text-xs font-semibold text-slate-600">Wallet</button>
-        <button onclick="KS.openProfileOnboarding(KS.user)" data-i18n="profile" class="py-2 rounded-xl text-xs font-semibold text-slate-600">Profile</button>
+        <button id="nav-profile-e" onclick="KS.switchPortalView('profile')" data-i18n="profile" class="py-2 rounded-xl text-xs font-semibold text-slate-600">Profile</button>
       </div>
 
       <!-- WORKER PORTAL -->
@@ -241,7 +242,7 @@
                 <option value="7">1 Week (7 Days)</option>
               </select>
               <select id="emp-pay-source" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-emerald-700">
-                <option value="wallet">Pay via KaamSetu Wallet</option>
+                <option value="wallet">Pay via Shramvani Wallet</option>
                 <option value="upi_gateway">Pay via UPI Gateway</option>
               </select>
             </div>
@@ -250,7 +251,7 @@
               <input id="emp-phone" type="tel" required placeholder="Contact Phone" class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium" />
             </div>
             <p id="escrow-fee-preview" class="text-[11px] font-semibold text-blue-700 bg-blue-50 px-3 py-2 rounded-xl">
-              Escrow Total: ₹800 -> Worker receives ₹760 (KaamSetu 5% mediator fee: ₹40)
+              Escrow Total: ₹800 -> Worker receives ₹760 (Shramvani 5% mediator fee: ₹40)
             </p>
             <div>
               <div class="flex justify-between items-center mb-1">
@@ -306,6 +307,51 @@
         <h3 class="text-sm font-extrabold text-slate-900 px-1">Escrow & Wallet Ledger</h3>
         <div id="wallet-tx-list" class="space-y-2.5"></div>
       </section>
+
+      <!-- IN-APP PROFILE VIEW (HEADER STAYS VISIBLE) -->
+   <section id="view-profile" class="hidden space-y-4">
+     <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+       <div class="flex items-center justify-between">
+         <div>
+           <h2 class="text-base font-extrabold text-slate-900">My Profile</h2>
+           <p id="edit-prof-badge" class="text-[11px] font-semibold text-emerald-700 mt-0.5">KYC Verified</p>
+         </div>
+         <span id="edit-prof-role" class="text-[10px] font-bold uppercase bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full">Worker</span>
+       </div>
+
+       <form onsubmit="KS.updateProfileDetails(event)" class="space-y-3">
+         <div>
+           <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Full Name (Locked)</label>
+           <input id="edit-prof-name" type="text" readonly disabled
+             class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold text-slate-500 cursor-not-allowed" />
+         </div>
+         <div>
+           <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Phone Number</label>
+           <input id="edit-prof-phone" type="tel" required minlength="10" maxlength="10"
+             class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:bg-white focus:border-blue-600" />
+         </div>
+         <div id="edit-prof-skill-wrap">
+           <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Primary Skill</label>
+           <select id="edit-prof-skill" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold"></select>
+         </div>
+         <div id="edit-prof-emptype-wrap" class="hidden">
+           <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Employer Type</label>
+           <select id="edit-prof-emptype" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold">
+             <option value="Shop">Shop / Business</option>
+             <option value="Homeowner">Homeowner</option>
+             <option value="Contractor">Contractor</option>
+           </select>
+         </div>
+         <div>
+           <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">Primary Area</label>
+           <select id="edit-prof-area" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-semibold"></select>
+         </div>
+         <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm py-3 rounded-xl shadow-sm transition">
+           Save Changes
+         </button>
+       </form>
+     </div>
+   </section>
     </main>
   </div>
 
@@ -371,24 +417,27 @@
   <script src="/js/voice.js"></script>
   <script>
     KS.switchPortalView = function (view) {
-      ["worker-jobs", "employer-dashboard", "employer-post", "wallet"].forEach((v) => {
-        document.getElementById(`view-${v}`).classList.toggle("hidden", v !== view);
-      });
-      const activeCls = "py-2 rounded-xl text-xs font-bold bg-white text-slate-900 shadow-sm";
-      const idleCls = "py-2 rounded-xl text-xs font-semibold text-slate-600";
-      if (KS.user && KS.user.role === "worker") {
-        document.getElementById("nav-worker-jobs").className = view === "worker-jobs" ? activeCls : idleCls;
-        document.getElementById("nav-wallet-w").className = view === "wallet" ? activeCls : idleCls;
-      } else {
-        document.getElementById("nav-employer-dashboard").className = view === "employer-dashboard" ? activeCls : idleCls;
-        document.getElementById("nav-employer-post").className = view === "employer-post" ? activeCls : idleCls;
-        document.getElementById("nav-wallet-e").className = view === "wallet" ? activeCls : idleCls;
-      }
-      if (view === "worker-jobs") KS.loadWorkerDashboard();
-      if (view === "employer-dashboard") KS.loadEmployerDashboard();
-      if (view === "employer-post") KS.initEmployerMap();
-      if (view === "wallet") KS.loadWallet();
-    };
+   ["worker-jobs", "employer-dashboard", "employer-post", "wallet", "profile"].forEach((v) => {
+     document.getElementById(`view-${v}`).classList.toggle("hidden", v !== view);
+   });
+   const activeCls = "py-2 rounded-xl text-xs font-bold bg-white text-slate-900 shadow-sm";
+   const idleCls = "py-2 rounded-xl text-xs font-semibold text-slate-600";
+   if (KS.user && KS.user.role === "worker") {
+     document.getElementById("nav-worker-jobs").className = view === "worker-jobs" ? activeCls : idleCls;
+     document.getElementById("nav-wallet-w").className = view === "wallet" ? activeCls : idleCls;
+     document.getElementById("nav-profile-w").className = view === "profile" ? activeCls : idleCls;
+   } else {
+     document.getElementById("nav-employer-dashboard").className = view === "employer-dashboard" ? activeCls : idleCls;
+     document.getElementById("nav-employer-post").className = view === "employer-post" ? activeCls : idleCls;
+     document.getElementById("nav-wallet-e").className = view === "wallet" ? activeCls : idleCls;
+     document.getElementById("nav-profile-e").className = view === "profile" ? activeCls : idleCls;
+   }
+   if (view === "worker-jobs") KS.loadWorkerDashboard();
+   if (view === "employer-dashboard") KS.loadEmployerDashboard();
+   if (view === "employer-post") KS.initEmployerMap();
+   if (view === "wallet") KS.loadWallet();
+   if (view === "profile") KS.loadProfileView();
+ };
     KS.initAuth();
   </script>
 </body>
