@@ -5,6 +5,20 @@ from database import AREAS, SKILL_HINDI, get_conn, haversine_coords_km, mask_pho
 jobs_bp = Blueprint("jobs", __name__)
 
 
+def _to_int(val, default=0):
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+
+def _to_float(val, default=0.0):
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
 def enrich_job(job: dict, reveal_phone: bool = False) -> dict:
     skill_hi = SKILL_HINDI.get(job["skill"], job["skill"])
     job["maps_url"] = (
@@ -24,17 +38,24 @@ def enrich_job(job: dict, reveal_phone: bool = False) -> dict:
 
 
 def try_finalize_job(cur, job_id: int) -> bool:
-    """Completes the job ONLY when worker_ended=1, employer_ended=1, AND payment_verified=1."""
-    row = cur.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    if not row or row["status"] != "accepted":
-        return False
-    if row["worker_ended"] == 1 and row["employer_ended"] == 1 and row["payment_verified"] == 1:
-        now_str = datetime.now().strftime("%d %b, %I:%M %p")
-        cur.execute("UPDATE jobs SET status = 'completed', completed_at = ? WHERE id = ?", (now_str, job_id))
+    """Atomically completes the job ONLY when worker_ended=1, employer_ended=1, AND payment_verified=1."""
+    now_str = datetime.now().strftime("%d %b, %I:%M %p")
+    cur.execute(
+        """UPDATE jobs
+           SET status = 'completed', completed_at = ?
+           WHERE id = ? AND status = 'accepted'
+             AND worker_ended = 1 AND employer_ended = 1 AND payment_verified = 1""",
+        (now_str, job_id),
+    )
+    if cur.rowcount == 1:
         cur.execute(
             """INSERT INTO job_messages (job_id, sender_role, sender_name, message, created_at)
                VALUES (?, 'system', 'KaamSetu', ?, ?)""",
-            (job_id, "Job Completed! Both parties ended the job and payment is verified. Worker is now free for new orders.", datetime.now().strftime("%I:%M %p")),
+            (
+                job_id,
+                "Job Completed! Both parties ended the job and payment is verified. Worker is now free for new orders.",
+                datetime.now().strftime("%I:%M %p"),
+            ),
         )
         return True
     return False
@@ -49,8 +70,8 @@ def list_jobs():
     skill = request.args.get("skill", "").strip()
     area = request.args.get("area", "").strip()
     query = request.args.get("q", "").strip().lower()
-    worker_id = int(request.args.get("worker_id", 0) or 0)
-    employer_id = int(request.args.get("employer_id", 0) or 0)
+    worker_id = _to_int(request.args.get("worker_id"), 0)
+    employer_id = _to_int(request.args.get("employer_id"), 0)
     origin = AREAS.get(area) if area in AREAS else None
 
     conn = get_conn()
@@ -61,7 +82,6 @@ def list_jobs():
         ]
         active_job = None
     else:
-        # Worker view: look up worker's skill from profile if not explicitly provided
         if worker_id and not skill:
             w = conn.execute("SELECT skill, area FROM users WHERE id = ?", (worker_id,)).fetchone()
             if w:
@@ -82,10 +102,8 @@ def list_jobs():
 
     results = []
     for j in rows:
-        # Strict skill-based filtering for workers
         if not employer_id and skill and j["skill"].lower() != skill.lower():
             continue
-        # Search bar matching
         if query:
             haystack = f"{j['employer_name']} {j['skill']} {j['area']} {j['address']} {j['duration_label']} {j['accepted_worker_name']}".lower()
             if query not in haystack:
@@ -102,21 +120,21 @@ def list_jobs():
 @jobs_bp.route("/api/jobs", methods=["POST"])
 def create_job():
     data = request.get_json(force=True)
-    employer_id = int(data.get("employer_id", 1) or 1)
+    employer_id = _to_int(data.get("employer_id"), 1)
     employer_name = (data.get("employer_name") or "Local Employer").strip()
     employer_type = (data.get("employer_type") or "Shop").strip()
     skill = (data.get("skill") or "Electrician").strip()
     area = (data.get("area") or "Laxmi Nagar").strip()
     address = (data.get("address") or f"Near Main Market, {area}").strip()
     duration_label = (data.get("duration_label") or "Full Day (8 hrs)").strip()
-    days = max(1, int(data.get("days", 1) or 1))
-    pay_amount = max(100, int(data.get("pay_amount", 700) or 700))
+    days = max(1, _to_int(data.get("days"), 1))
+    pay_amount = max(100, _to_int(data.get("pay_amount"), 700))
     payment_mode = (data.get("payment_mode") or "Cash").strip()
     phone = (data.get("phone") or "9810011221").strip()
 
     default_lat, default_lon = AREAS.get(area, (28.6304, 77.2772))
-    lat = float(data.get("lat") or default_lat)
-    lon = float(data.get("lon") or default_lon)
+    lat = _to_float(data.get("lat"), default_lat)
+    lon = _to_float(data.get("lon"), default_lon)
 
     conn = get_conn()
     cur = conn.cursor()
@@ -125,8 +143,10 @@ def create_job():
            (employer_id, employer_name, employer_type, skill, area, address, lat, lon,
             duration_label, days, pay_amount, payment_mode, phone, status, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)""",
-        (employer_id, employer_name, employer_type, skill, area, address, lat, lon,
-         duration_label, days, pay_amount, payment_mode, phone, datetime.now().isoformat()),
+        (
+            employer_id, employer_name, employer_type, skill, area, address, lat, lon,
+            duration_label, days, pay_amount, payment_mode, phone, datetime.now().isoformat(),
+        ),
     )
     job_id = cur.lastrowid
     conn.commit()
@@ -138,9 +158,12 @@ def create_job():
 @jobs_bp.route("/api/jobs/<int:job_id>/accept", methods=["POST"])
 def accept_job(job_id: int):
     data = request.get_json(force=True)
-    worker_id = int(data.get("worker_id", 0) or 0)
+    worker_id = _to_int(data.get("worker_id"), 0)
     worker_name = (data.get("worker_name") or "Worker").strip()
     worker_phone = (data.get("worker_phone") or "9811000099").strip()
+
+    if worker_id <= 0:
+        return jsonify({"error": "Invalid worker account. Please log in again."}), 400
 
     conn = get_conn()
     cur = conn.cursor()
@@ -160,19 +183,23 @@ def accept_job(job_id: int):
         conn.close()
         return jsonify({"error": "Job not found."}), 404
     job = dict(row)
-    if job["status"] != "open":
-        conn.close()
-        return jsonify({"error": "This job has already been accepted."}), 409
 
     now = datetime.now()
     now_str = now.strftime("%d %b %Y, %I:%M %p")
+
+    # Atomic guard: succeeds ONLY if job is still 'open'
     cur.execute(
         """UPDATE jobs
            SET status = 'accepted', accepted_worker_id = ?, accepted_worker_name = ?,
                accepted_worker_phone = ?, accepted_at = ?
-           WHERE id = ?""",
+           WHERE id = ? AND status = 'open'""",
         (worker_id, worker_name, worker_phone, now_str, job_id),
     )
+    if cur.rowcount == 0:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": "This job has already been accepted."}), 409
+
     cur.execute(
         """INSERT INTO job_messages (job_id, sender_role, sender_name, message, created_at)
            VALUES (?, 'system', 'KaamSetu', ?, ?)""",
@@ -209,17 +236,19 @@ def end_job(job_id: int):
         return jsonify({"error": "Active order not found."}), 404
 
     if role == "worker":
-        cur.execute("UPDATE jobs SET worker_ended = 1 WHERE id = ?", (job_id,))
+        cur.execute("UPDATE jobs SET worker_ended = 1 WHERE id = ? AND status = 'accepted' AND worker_ended = 0", (job_id,))
         note = "Worker clicked End Job."
     else:
-        cur.execute("UPDATE jobs SET employer_ended = 1 WHERE id = ?", (job_id,))
+        cur.execute("UPDATE jobs SET employer_ended = 1 WHERE id = ? AND status = 'accepted' AND employer_ended = 0", (job_id,))
         note = "Employer clicked End Job."
 
-    cur.execute(
-        """INSERT INTO job_messages (job_id, sender_role, sender_name, message, created_at)
-           VALUES (?, 'system', 'KaamSetu', ?, ?)""",
-        (job_id, note, datetime.now().strftime("%I:%M %p")),
-    )
+    if cur.rowcount == 1:
+        cur.execute(
+            """INSERT INTO job_messages (job_id, sender_role, sender_name, message, created_at)
+               VALUES (?, 'system', 'KaamSetu', ?, ?)""",
+            (job_id, note, datetime.now().strftime("%I:%M %p")),
+        )
+
     finalized = try_finalize_job(cur, job_id)
     conn.commit()
     updated = enrich_job(dict(cur.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()), reveal_phone=True)

@@ -1,13 +1,28 @@
 window.KS = window.KS || {};
 KS.AREA_COORDS = {};
 KS.SKILLS = [];
+KS.currentAudio = null;
+
+KS.escapeHtml = function (str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+};
 
 KS.api = async function (url, options = {}) {
   const res = await fetch(url, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
-  const data = await res.json();
+  let data = {};
+  try {
+    data = await res.json();
+  } catch (e) {
+    throw new Error(`Server error (${res.status}). Please try again.`);
+  }
   if (!res.ok) throw new Error(data.error || "Request failed");
   return data;
 };
@@ -31,6 +46,15 @@ KS.loadMeta = async function () {
 };
 
 KS.speakHindi = async function (text) {
+  // Stop any currently playing voice readout so voices never overlap
+  if (KS.currentAudio) {
+    KS.currentAudio.pause();
+    KS.currentAudio = null;
+  }
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+
   try {
     const res = await fetch("/api/tts", {
       method: "POST",
@@ -39,12 +63,16 @@ KS.speakHindi = async function (text) {
     });
     if (res.ok) {
       const blob = await res.blob();
-      new Audio(URL.createObjectURL(blob)).play();
+      const objUrl = URL.createObjectURL(blob);
+      const audio = new Audio(objUrl);
+      KS.currentAudio = audio;
+      audio.onended = () => URL.revokeObjectURL(objUrl);
+      await audio.play();
       return;
     }
   } catch (e) {}
+
   if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "hi-IN";
     u.rate = 0.95;

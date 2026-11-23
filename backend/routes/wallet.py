@@ -7,6 +7,13 @@ from routes.jobs import enrich_job, try_finalize_job
 wallet_bp = Blueprint("wallet", __name__)
 
 
+def _to_int(val, default=0):
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+
 @wallet_bp.route("/api/wallet/<int:user_id>", methods=["GET"])
 def get_wallet_summary(user_id: int):
     conn = get_conn()
@@ -22,10 +29,17 @@ def get_wallet_summary(user_id: int):
             "SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC LIMIT 30", (user_id,)
         ).fetchall()
     ]
+    cash_total = conn.execute(
+        """SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE user_id = ? AND payment_method = 'Cash' AND tx_type IN ('cash_earned', 'cash_paid')""",
+        (user_id,),
+    ).fetchone()[0]
+    online_total = conn.execute(
+        """SELECT COALESCE(SUM(amount), 0) FROM transactions
+           WHERE user_id = ? AND payment_method = 'UPI' AND tx_type IN ('credit', 'debit')""",
+        (user_id,),
+    ).fetchone()[0]
     conn.close()
-
-    cash_total = sum(t["amount"] for t in txs if t["payment_method"] == "Cash" and t["tx_type"] in ("cash_earned", "cash_paid"))
-    online_total = sum(t["amount"] for t in txs if t["payment_method"] == "UPI" and t["tx_type"] in ("credit", "debit"))
 
     return jsonify({
         "wallet_balance": user["wallet_balance"],
@@ -39,8 +53,8 @@ def get_wallet_summary(user_id: int):
 @wallet_bp.route("/api/wallet/add-money", methods=["POST"])
 def add_money():
     data = request.get_json(force=True)
-    user_id = int(data.get("user_id", 0) or 0)
-    amount = int(data.get("amount", 0) or 0)
+    user_id = _to_int(data.get("user_id"), 0)
+    amount = _to_int(data.get("amount"), 0)
     if amount < 100 or amount > 50000:
         return jsonify({"error": "Enter an amount between ₹100 and ₹50,000."}), 400
 
@@ -67,8 +81,8 @@ def add_money():
 @wallet_bp.route("/api/wallet/withdraw", methods=["POST"])
 def withdraw_money():
     data = request.get_json(force=True)
-    user_id = int(data.get("user_id", 0) or 0)
-    amount = int(data.get("amount", 0) or 0)
+    user_id = _to_int(data.get("user_id"), 0)
+    amount = _to_int(data.get("amount"), 0)
     upi_id = (data.get("upi_id") or "worker@upi").strip()
 
     if amount < 50:
@@ -80,12 +94,19 @@ def withdraw_money():
     if not row:
         conn.close()
         return jsonify({"error": "User not found"}), 404
-    if row["wallet_balance"] < amount:
+
+    # Atomic balance guard prevents double-click overdraft
+    cur.execute(
+        "UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ? AND wallet_balance >= ?",
+        (amount, user_id, amount),
+    )
+    if cur.rowcount == 0:
+        conn.rollback()
+        bal = cur.execute("SELECT wallet_balance FROM users WHERE id = ?", (user_id,)).fetchone()["wallet_balance"]
         conn.close()
-        return jsonify({"error": f"Insufficient wallet balance (Available: ₹{row['wallet_balance']})."}), 400
+        return jsonify({"error": f"Insufficient wallet balance (Available: ₹{bal})."}), 400
 
     now_str = datetime.now().strftime("%d %b, %I:%M %p")
-    cur.execute("UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ?", (amount, user_id))
     cur.execute(
         """INSERT INTO transactions (user_id, job_id, tx_type, payment_method, amount, title, note, created_at)
            VALUES (?, 0, 'withdraw', 'UPI', ?, 'Withdrawn to Bank / UPI', ?, ?)""",
@@ -101,7 +122,7 @@ def withdraw_money():
 def confirm_cash_collected(job_id: int):
     """Worker confirms they physically collected Cash from the employer."""
     data = request.get_json(force=True)
-    worker_id = int(data.get("worker_id", 0) or 0)
+    worker_id = _to_int(data.get("worker_id"), 0)
 
     conn = get_conn()
     cur = conn.cursor()
@@ -114,17 +135,22 @@ def confirm_cash_collected(job_id: int):
     if worker_id and job["accepted_worker_id"] != worker_id:
         conn.close()
         return jsonify({"error": "Only the assigned worker can confirm cash collection."}), 403
-    if job["payment_verified"] == 1:
+
+    # Atomic lock: succeeds ONLY once while payment_verified = 0
+    cur.execute(
+        """UPDATE jobs
+           SET payment_verified = 1, payment_method_used = 'Cash'
+           WHERE id = ? AND status = 'accepted' AND payment_verified = 0""",
+        (job_id,),
+    )
+    if cur.rowcount == 0:
+        conn.rollback()
         conn.close()
-        return jsonify({"error": "Payment is already verified for this order."}), 400
+        return jsonify({"error": "Payment is already verified for this order."}), 409
 
     amount = job["pay_amount"]
     now_str = datetime.now().strftime("%d %b, %I:%M %p")
 
-    cur.execute(
-        "UPDATE jobs SET payment_verified = 1, payment_method_used = 'Cash' WHERE id = ?",
-        (job_id,),
-    )
     cur.execute(
         """INSERT INTO transactions (user_id, job_id, tx_type, payment_method, amount, title, note, created_at)
            VALUES (?, ?, 'cash_earned', 'Cash', ?, ?, 'Confirmed collected in Cash', ?)""",
@@ -153,9 +179,9 @@ def confirm_cash_collected(job_id: int):
 
 @wallet_bp.route("/api/jobs/<int:job_id>/pay-upi", methods=["POST"])
 def verify_upi_payment(job_id: int):
-    """Employer pays via UPI/Wallet; app verifies UPI transaction & credits Worker's Wallet."""
+    """Employer pays via UPI/Wallet; app atomically verifies transaction & credits Worker's Wallet."""
     data = request.get_json(force=True)
-    employer_id = int(data.get("employer_id", 0) or 0)
+    employer_id = _to_int(data.get("employer_id"), 0)
     upi_id = (data.get("upi_id") or "employer@upi").strip()
 
     if "@" not in upi_id:
@@ -169,32 +195,44 @@ def verify_upi_payment(job_id: int):
         return jsonify({"error": "Active order not found."}), 404
     job = dict(row)
 
-    if job["payment_verified"] == 1:
+    if employer_id and job["employer_id"] and job["employer_id"] != employer_id:
         conn.close()
-        return jsonify({"error": "Payment is already verified for this order."}), 400
+        return jsonify({"error": "Only the employer who posted this job can pay for it."}), 403
 
     emp_id = job["employer_id"] or employer_id
     amount = job["pay_amount"]
-    emp = cur.execute("SELECT * FROM users WHERE id = ?", (emp_id,)).fetchone()
-    if not emp or emp["wallet_balance"] < amount:
+    utr = "UPI" + secrets.token_hex(4).upper()
+    now_str = datetime.now().strftime("%d %b, %I:%M %p")
+
+    # 1. Atomically claim payment verification on this job (blocks double-click)
+    cur.execute(
+        """UPDATE jobs
+           SET payment_verified = 1, payment_method_used = 'UPI', upi_ref_id = ?
+           WHERE id = ? AND status = 'accepted' AND payment_verified = 0""",
+        (utr, job_id),
+    )
+    if cur.rowcount == 0:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": "Payment is already verified for this order."}), 409
+
+    # 2. Atomically deduct employer wallet ONLY if balance >= amount
+    cur.execute(
+        "UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ? AND wallet_balance >= ?",
+        (amount, emp_id, amount),
+    )
+    if cur.rowcount == 0:
+        conn.rollback()  # Undoes the payment_verified flag above cleanly
+        emp = cur.execute("SELECT wallet_balance FROM users WHERE id = ?", (emp_id,)).fetchone()
         bal = emp["wallet_balance"] if emp else 0
         conn.close()
         return jsonify({
             "error": f"Insufficient Wallet/UPI balance (₹{bal}). Add money in Wallet tab first."
         }), 400
 
-    utr = "UPI" + secrets.token_hex(4).upper()
-    now_str = datetime.now().strftime("%d %b, %I:%M %p")
-
-    # Deduct employer, credit worker
-    cur.execute("UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ?", (amount, emp_id))
+    # 3. Credit worker wallet & write ledger entries
     if job["accepted_worker_id"]:
         cur.execute("UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?", (amount, job["accepted_worker_id"]))
-
-    cur.execute(
-        "UPDATE jobs SET payment_verified = 1, payment_method_used = 'UPI', upi_ref_id = ? WHERE id = ?",
-        (utr, job_id),
-    )
 
     cur.execute(
         """INSERT INTO transactions (user_id, job_id, tx_type, payment_method, amount, title, note, created_at)
