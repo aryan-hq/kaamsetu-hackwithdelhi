@@ -10,7 +10,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js"></script>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body class="min-h-screen font-['Plus_Jakarta_Sans','Noto_Sans_Devanagari',sans-serif]">
@@ -79,12 +78,18 @@
   <!-- ==================== 2. PROFILE + AADHAAR & LIVE FACE KYC ==================== -->
   <div id="profile-setup-screen" class="hidden min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-md bg-white rounded-3xl p-6 shadow-xl border border-slate-200/80">
-      <div class="flex items-center gap-3 mb-4">
-        <img src="/assets/logo.svg" alt="KaamSetu" class="w-10 h-10 rounded-xl" />
-        <div>
-          <h2 id="prof-role-label" class="text-base font-extrabold text-slate-900 leading-none">Complete Profile & KYC</h2>
-          <p class="text-[11px] text-slate-500 mt-1">Identity verification keeps KaamSetu safe</p>
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <div class="flex items-center gap-3">
+          <img src="/assets/logo.svg" alt="KaamSetu" class="w-10 h-10 rounded-xl" />
+          <div>
+            <h2 id="prof-role-label" class="text-base font-extrabold text-slate-900 leading-none">Complete Profile & KYC</h2>
+            <p class="text-[11px] text-slate-500 mt-1">Identity verification keeps KaamSetu safe</p>
+          </div>
         </div>
+        <button type="button" onclick="KS.logout()"
+          class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1.5 rounded-xl shrink-0">
+          ← Back
+        </button>
       </div>
 
       <form onsubmit="KS.saveProfile(event)" class="space-y-3">

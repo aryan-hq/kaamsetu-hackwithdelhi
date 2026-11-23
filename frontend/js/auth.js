@@ -5,9 +5,8 @@ KS.authRole = "worker";
 KS.cameraStream = null;
 KS.liveFaceCaptured = false;
 KS.docUploaded = false;
-KS.faceModelsLoaded = false;
-KS.docDescriptor = null;
-KS.faceMatchScore = 0;
+KS.docImageData = "";
+KS.selfieImageData = "";
 
 KS.setAuthMode = function (mode) {
   KS.authMode = mode;
@@ -113,7 +112,7 @@ KS.openProfileOnboarding = function (user) {
   document.getElementById("app-shell").classList.add("hidden");
   document.getElementById("profile-setup-screen").classList.remove("hidden");
   document.getElementById("prof-role-label").textContent =
-    user.role === "worker" ? "Worker Profile & Aadhaar Face KYC" : "Employer Profile & Aadhaar Face KYC";
+    user.role === "worker" ? "Worker Profile & Aadhaar KYC" : "Employer Profile & Aadhaar KYC";
   document.getElementById("prof-name").value = user.name || "";
   document.getElementById("prof-phone").value = user.phone || "";
   document.getElementById("prof-skill-wrap").classList.toggle("hidden", user.role !== "worker");
@@ -123,47 +122,23 @@ KS.openProfileOnboarding = function (user) {
   if (user.area) document.getElementById("prof-area").value = user.area;
 };
 
-KS.loadFaceModels = async function () {
-  if (KS.faceModelsLoaded) return;
-  const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model";
-  await Promise.all([
-    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-  ]);
-  KS.faceModelsLoaded = true;
-};
-
-KS.handleDocUpload = async function (input) {
+KS.handleDocUpload = function (input) {
   if (!input.files || !input.files[0]) return;
-  const status = document.getElementById("kyc-doc-status");
-  const img = document.getElementById("kyc-doc-preview");
-  status.textContent = "Loading AI face model & scanning ID photo...";
-  status.className = "text-[11px] text-blue-600 font-semibold mt-0.5";
-
-  img.src = URL.createObjectURL(input.files[0]);
-  img.classList.remove("hidden");
-
-  img.onload = async () => {
-    try {
-      await KS.loadFaceModels();
-      const det = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
-      if (!det) {
-        KS.docUploaded = false;
-        KS.docDescriptor = null;
-        status.textContent = "No clear face found on ID photo. Please upload a clearer photo.";
-        status.className = "text-[11px] text-red-600 font-semibold mt-0.5";
-        return;
-      }
-      KS.docUploaded = true;
-      KS.docDescriptor = det.descriptor;
-      status.textContent = "Face detected on ID photo! Now capture your live selfie.";
-      status.className = "text-[11px] text-emerald-700 font-semibold mt-0.5";
-    } catch (err) {
-      status.textContent = "Could not load face model. Check internet connection.";
-      status.className = "text-[11px] text-red-600 font-semibold mt-0.5";
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    KS.docImageData = e.target.result;
+    KS.docUploaded = true;
+    const img = document.getElementById("kyc-doc-preview");
+    if (img) {
+      img.src = KS.docImageData;
+      img.classList.remove("hidden");
     }
+    const status = document.getElementById("kyc-doc-status");
+    status.textContent = `ID photo attached: ${file.name}`;
+    status.className = "text-[11px] text-emerald-700 font-semibold mt-0.5";
   };
+  reader.readAsDataURL(file);
 };
 
 KS.startLiveCamera = async function () {
@@ -178,12 +153,7 @@ KS.startLiveCamera = async function () {
   }
 };
 
-KS.captureLiveSelfie = async function () {
-  const status = document.getElementById("kyc-face-status");
-  if (!KS.docDescriptor) {
-    return alert("Please upload a clear ID photo first so we can match your face.");
-  }
-
+KS.captureLiveSelfie = function () {
   const video = document.getElementById("kyc-video");
   const canvas = document.getElementById("kyc-canvas");
   canvas.width = 320;
@@ -193,37 +163,11 @@ KS.captureLiveSelfie = async function () {
   video.classList.add("hidden");
   KS.stopCamera();
 
-  status.textContent = "Comparing live face with ID photo...";
-  status.className = "text-[11px] font-bold text-blue-600";
-
-  try {
-    await KS.loadFaceModels();
-    const liveDet = await faceapi.detectSingleFace(canvas).withFaceLandmarks().withFaceDescriptor();
-    if (!liveDet) {
-      KS.liveFaceCaptured = false;
-      status.textContent = "No face detected in selfie. Look straight at the camera and retry.";
-      status.className = "text-[11px] font-bold text-red-600";
-      return;
-    }
-
-    const distance = faceapi.euclideanDistance(KS.docDescriptor, liveDet.descriptor);
-    const similarity = Math.max(0, Math.min(99, Math.round((1 - distance) * 100)));
-
-    if (distance < 0.6) {
-      KS.liveFaceCaptured = true;
-      KS.faceMatchScore = similarity;
-      status.textContent = `Face Matched! (${similarity}% similarity · Distance: ${distance.toFixed(2)})`;
-      status.className = "text-[11px] font-bold text-emerald-700";
-    } else {
-      KS.liveFaceCaptured = false;
-      KS.faceMatchScore = similarity;
-      status.textContent = `Face Mismatch (${similarity}%). Live selfie does not match ID photo.`;
-      status.className = "text-[11px] font-bold text-red-600";
-    }
-  } catch (err) {
-    status.textContent = "Face comparison failed. Please try again.";
-    status.className = "text-[11px] font-bold text-red-600";
-  }
+  KS.selfieImageData = canvas.toDataURL("image/jpeg", 0.7);
+  KS.liveFaceCaptured = true;
+  const status = document.getElementById("kyc-face-status");
+  status.textContent = "Live selfie captured and ready to save.";
+  status.className = "text-[11px] font-bold text-emerald-700";
 };
 
 KS.stopCamera = function () {
@@ -247,7 +191,8 @@ KS.saveProfile = async function (e) {
         id_number: (document.getElementById("kyc-id-number")?.value || "").trim(),
         doc_uploaded: KS.docUploaded,
         live_face_captured: KS.liveFaceCaptured,
-        face_match_score: KS.faceMatchScore,
+        doc_photo: KS.docImageData,
+        selfie_photo: KS.selfieImageData,
       }),
     });
     KS.handleAuthenticatedUser(user);
@@ -260,8 +205,8 @@ KS.logout = function () {
   KS.stopCamera();
   KS.docUploaded = false;
   KS.liveFaceCaptured = false;
-  KS.docDescriptor = null;
-  KS.faceMatchScore = 0;
+  KS.docImageData = "";
+  KS.selfieImageData = "";
   localStorage.removeItem("kaamsetu_user");
   localStorage.removeItem("kaamsetu_token");
   KS.user = null;
