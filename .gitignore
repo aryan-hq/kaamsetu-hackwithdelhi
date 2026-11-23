@@ -5,5 +5,3 @@ backend/routes/__pycache__/
 *.db
 .env
 .DS_Store
-venv/
-**/__pycache__/

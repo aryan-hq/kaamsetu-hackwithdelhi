@@ -10,12 +10,8 @@
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="16" fill="url(#ksGrad)"/>
-  <!-- Bridge / Setu Arch -->
   <path d="M12 43C15.5 28 23.5 21 32 21C40.5 21 48.5 28 52 43" stroke="url(#archGrad)" stroke-width="5.5" stroke-linecap="round"/>
-  <!-- Bridge Deck -->
   <path d="M10 43H54" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round"/>
-  <!-- Support Pillars -->
   <path d="M22 27V43M42 27V43" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" opacity="0.85"/>
-  <!-- Connection Spark / Location Pin Dot -->
   <circle cx="32" cy="14" r="3.5" fill="#34D399"/>
 </svg>

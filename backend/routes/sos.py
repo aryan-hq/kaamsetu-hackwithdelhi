@@ -8,7 +8,6 @@ sos_bp = Blueprint("sos", __name__)
 
 @sos_bp.route("/api/sos", methods=["POST"])
 def trigger_sos():
-    """100% local privacy: calculates nearest Govt Hospital locally without sharing data with hospitals."""
     data = request.get_json(force=True)
     worker_name = (data.get("worker_name") or "User").strip()
     family_phone = (data.get("family_phone") or "9811998877").strip()

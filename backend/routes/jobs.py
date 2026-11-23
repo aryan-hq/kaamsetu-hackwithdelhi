@@ -1,22 +1,16 @@
+import secrets
 from datetime import datetime
 from flask import Blueprint, jsonify, request
-from database import AREAS, SKILL_HINDI, get_conn, haversine_coords_km, mask_phone
+from database import (
+    AREAS,
+    PLATFORM_FEE_PERCENT,
+    SKILL_HINDI,
+    get_conn,
+    haversine_coords_km,
+    mask_phone,
+)
 
 jobs_bp = Blueprint("jobs", __name__)
-
-
-def _to_int(val, default=0):
-    try:
-        return int(val)
-    except (ValueError, TypeError):
-        return default
-
-
-def _to_float(val, default=0.0):
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return default
 
 
 def enrich_job(job: dict, reveal_phone: bool = False) -> dict:
@@ -26,7 +20,7 @@ def enrich_job(job: dict, reveal_phone: bool = False) -> dict:
     )
     job["hindi_audio_text"] = (
         f"{job['area']} में {job['employer_name']} पर {skill_hi} का काम है। "
-        f"समय: {job['duration_label']}। भुगतान {job['pay_amount']} रुपये।"
+        f"समय: {job['duration_label']}। आपको {job['worker_payout']} रुपये मिलेंगे।"
     )
     if reveal_phone or job["status"] in ("accepted", "completed"):
         job["display_phone"] = job["phone"]
@@ -37,23 +31,48 @@ def enrich_job(job: dict, reveal_phone: bool = False) -> dict:
     return job
 
 
-def try_finalize_job(cur, job_id: int) -> bool:
-    """Atomically completes the job ONLY when worker_ended=1, employer_ended=1, AND payment_verified=1."""
-    now_str = datetime.now().strftime("%d %b, %I:%M %p")
-    cur.execute(
-        """UPDATE jobs
-           SET status = 'completed', completed_at = ?
-           WHERE id = ? AND status = 'accepted'
-             AND worker_ended = 1 AND employer_ended = 1 AND payment_verified = 1""",
-        (now_str, job_id),
-    )
-    if cur.rowcount == 1:
+def try_release_escrow_and_complete(cur, job_id: int) -> bool:
+    """
+    Mediator Escrow Release:
+    When BOTH worker_ended=1 and employer_ended=1:
+    - Releases worker_payout (95%) from KaamSetu Escrow to Worker's Wallet.
+    - Retains platform_fee (5%) as KaamSetu mediator cut.
+    - Marks job completed and unlocks worker for next order.
+    """
+    row = cur.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    if not row or row["status"] != "accepted":
+        return False
+    if row["worker_ended"] == 1 and row["employer_ended"] == 1:
+        now_str = datetime.now().strftime("%d %b, %I:%M %p")
+        payout = row["worker_payout"]
+        fee = row["platform_fee"]
+        wid = row["accepted_worker_id"]
+
+        if wid and row["escrow_status"] == "held":
+            cur.execute("UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?", (payout, wid))
+            cur.execute(
+                """INSERT INTO transactions (user_id, job_id, tx_type, payment_method, amount, title, note, created_at)
+                   VALUES (?, ?, 'credit', 'Escrow', ?, ?, ?, ?)""",
+                (
+                    wid,
+                    job_id,
+                    payout,
+                    f"Escrow Released · {row['employer_name']}",
+                    f"Job ₹{row['pay_amount']} - ₹{fee} ({PLATFORM_FEE_PERCENT}% KaamSetu fee)",
+                    now_str,
+                ),
+            )
+
+        cur.execute(
+            "UPDATE jobs SET status = 'completed', escrow_status = 'released', completed_at = ? WHERE id = ?",
+            (now_str, job_id),
+        )
         cur.execute(
             """INSERT INTO job_messages (job_id, sender_role, sender_name, message, created_at)
-               VALUES (?, 'system', 'KaamSetu', ?, ?)""",
+               VALUES (?, 'system', 'KaamSetu Escrow', ?, ?)""",
             (
                 job_id,
-                "Job Completed! Both parties ended the job and payment is verified. Worker is now free for new orders.",
+                f"Both parties ended the job! ₹{payout} transferred from KaamSetu Escrow to {row['accepted_worker_name']}'s Wallet (Platform fee: ₹{fee}).",
                 datetime.now().strftime("%I:%M %p"),
             ),
         )
@@ -63,15 +82,11 @@ def try_finalize_job(cur, job_id: int) -> bool:
 
 @jobs_bp.route("/api/jobs", methods=["GET"])
 def list_jobs():
-    """
-    Worker portal: filters open jobs strictly by worker's skill + optional search query.
-    Employer portal: passes employer_id to see their own posted/active/completed orders + optional search query.
-    """
     skill = request.args.get("skill", "").strip()
     area = request.args.get("area", "").strip()
     query = request.args.get("q", "").strip().lower()
-    worker_id = _to_int(request.args.get("worker_id"), 0)
-    employer_id = _to_int(request.args.get("employer_id"), 0)
+    worker_id = int(request.args.get("worker_id", 0) or 0)
+    employer_id = int(request.args.get("employer_id", 0) or 0)
     origin = AREAS.get(area) if area in AREAS else None
 
     conn = get_conn()
@@ -118,52 +133,82 @@ def list_jobs():
 
 
 @jobs_bp.route("/api/jobs", methods=["POST"])
-def create_job():
+def create_job_with_escrow():
+    """
+    Employer pays upfront when posting a job.
+    KaamSetu holds the amount in Escrow until both parties click End Job.
+    """
     data = request.get_json(force=True)
-    employer_id = _to_int(data.get("employer_id"), 1)
+    employer_id = int(data.get("employer_id", 1) or 1)
     employer_name = (data.get("employer_name") or "Local Employer").strip()
     employer_type = (data.get("employer_type") or "Shop").strip()
     skill = (data.get("skill") or "Electrician").strip()
     area = (data.get("area") or "Laxmi Nagar").strip()
     address = (data.get("address") or f"Near Main Market, {area}").strip()
     duration_label = (data.get("duration_label") or "Full Day (8 hrs)").strip()
-    days = max(1, _to_int(data.get("days"), 1))
-    pay_amount = max(100, _to_int(data.get("pay_amount"), 700))
-    payment_mode = (data.get("payment_mode") or "Cash").strip()
+    days = max(1, int(data.get("days", 1) or 1))
+    pay_amount = max(100, int(data.get("pay_amount", 700) or 700))
+    pay_source = (data.get("pay_source") or "wallet").strip().lower()  # 'wallet' or 'upi_gateway'
     phone = (data.get("phone") or "9810011221").strip()
 
+    platform_fee = max(10, round(pay_amount * PLATFORM_FEE_PERCENT / 100))
+    worker_payout = pay_amount - platform_fee
+    escrow_ref = "ESC-" + secrets.token_hex(4).upper()
+
     default_lat, default_lon = AREAS.get(area, (28.6304, 77.2772))
-    lat = _to_float(data.get("lat"), default_lat)
-    lon = _to_float(data.get("lon"), default_lon)
+    lat = float(data.get("lat") or default_lat)
+    lon = float(data.get("lon") or default_lon)
 
     conn = get_conn()
     cur = conn.cursor()
+
+    emp = cur.execute("SELECT * FROM users WHERE id = ?", (employer_id,)).fetchone()
+    if pay_source == "wallet":
+        if not emp or emp["wallet_balance"] < pay_amount:
+            bal = emp["wallet_balance"] if emp else 0
+            conn.close()
+            return jsonify({
+                "error": f"Insufficient Wallet balance (₹{bal}) to fund ₹{pay_amount} Escrow. Top up Wallet or pay via UPI Gateway."
+            }), 400
+        cur.execute("UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ?", (pay_amount, employer_id))
+
+    now_str = datetime.now().strftime("%d %b, %I:%M %p")
     cur.execute(
         """INSERT INTO jobs
            (employer_id, employer_name, employer_type, skill, area, address, lat, lon,
-            duration_label, days, pay_amount, payment_mode, phone, status, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)""",
-        (
-            employer_id, employer_name, employer_type, skill, area, address, lat, lon,
-            duration_label, days, pay_amount, payment_mode, phone, datetime.now().isoformat(),
-        ),
+            duration_label, days, pay_amount, platform_fee, worker_payout, escrow_status, escrow_ref, phone, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'held', ?, ?, 'open', ?)""",
+        (employer_id, employer_name, employer_type, skill, area, address, lat, lon,
+         duration_label, days, pay_amount, platform_fee, worker_payout, escrow_ref, phone, datetime.now().isoformat()),
     )
     job_id = cur.lastrowid
+
+    cur.execute(
+        """INSERT INTO transactions (user_id, job_id, tx_type, payment_method, amount, title, note, created_at)
+           VALUES (?, ?, 'escrow_lock', ?, ?, ?, ?, ?)""",
+        (
+            employer_id,
+            job_id,
+            "Wallet" if pay_source == "wallet" else "UPI",
+            pay_amount,
+            f"Escrow Held · {skill} Job #{job_id}",
+            f"Ref: {escrow_ref} (Held safely by KaamSetu)",
+            now_str,
+        ),
+    )
+
     conn.commit()
     job = enrich_job(dict(cur.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()), reveal_phone=True)
     conn.close()
-    return jsonify({"job": job}), 201
+    return jsonify({"job": job, "escrow_ref": escrow_ref}), 201
 
 
 @jobs_bp.route("/api/jobs/<int:job_id>/accept", methods=["POST"])
 def accept_job(job_id: int):
     data = request.get_json(force=True)
-    worker_id = _to_int(data.get("worker_id"), 0)
+    worker_id = int(data.get("worker_id", 0) or 0)
     worker_name = (data.get("worker_name") or "Worker").strip()
     worker_phone = (data.get("worker_phone") or "9811000099").strip()
-
-    if worker_id <= 0:
-        return jsonify({"error": "Invalid worker account. Please log in again."}), 400
 
     conn = get_conn()
     cur = conn.cursor()
@@ -175,7 +220,7 @@ def accept_job(job_id: int):
     if existing:
         conn.close()
         return jsonify({
-            "error": f"You already have an active order with {existing['employer_name']} (#{existing['id']}). Both parties must end it and verify payment first."
+            "error": f"You already have an active order with {existing['employer_name']} (#{existing['id']}). Both parties must end it first."
         }), 409
 
     row = cur.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
@@ -183,29 +228,25 @@ def accept_job(job_id: int):
         conn.close()
         return jsonify({"error": "Job not found."}), 404
     job = dict(row)
+    if job["status"] != "open":
+        conn.close()
+        return jsonify({"error": "This job has already been accepted."}), 409
 
     now = datetime.now()
     now_str = now.strftime("%d %b %Y, %I:%M %p")
-
-    # Atomic guard: succeeds ONLY if job is still 'open'
     cur.execute(
         """UPDATE jobs
            SET status = 'accepted', accepted_worker_id = ?, accepted_worker_name = ?,
                accepted_worker_phone = ?, accepted_at = ?
-           WHERE id = ? AND status = 'open'""",
+           WHERE id = ?""",
         (worker_id, worker_name, worker_phone, now_str, job_id),
     )
-    if cur.rowcount == 0:
-        conn.rollback()
-        conn.close()
-        return jsonify({"error": "This job has already been accepted."}), 409
-
     cur.execute(
         """INSERT INTO job_messages (job_id, sender_role, sender_name, message, created_at)
-           VALUES (?, 'system', 'KaamSetu', ?, ?)""",
+           VALUES (?, 'system', 'KaamSetu Escrow', ?, ?)""",
         (
             job_id,
-            f"Order accepted by {worker_name} for {job['duration_label']} (₹{job['pay_amount']} · {job['payment_mode']}). Phone numbers are now unlocked.",
+            f"Order accepted by {worker_name}! ₹{job['pay_amount']} is safely held in KaamSetu Escrow ({job['escrow_ref']}). Phone numbers are unlocked.",
             now.strftime("%I:%M %p"),
         ),
     )
@@ -214,15 +255,13 @@ def accept_job(job_id: int):
     conn.close()
 
     hindi_confirm = (
-        f"काम स्वीकार हो गया है। {job['employer_name']} पर {job['duration_label']} के लिए "
-        f"{job['pay_amount']} रुपये तय हैं।"
+        f"काम स्वीकार हो गया है। {job['employer_name']} के {job['worker_payout']} रुपये कामसेतु एस्क्रो में सुरक्षित हैं।"
     )
     return jsonify({"job": updated_job, "hindi_confirm": hindi_confirm}), 200
 
 
 @jobs_bp.route("/api/jobs/<int:job_id>/end", methods=["POST"])
 def end_job(job_id: int):
-    """Dual confirmation: both worker and employer must click End Job."""
     data = request.get_json(force=True)
     role = (data.get("role") or "").strip().lower()
     if role not in ("worker", "employer"):
@@ -236,25 +275,27 @@ def end_job(job_id: int):
         return jsonify({"error": "Active order not found."}), 404
 
     if role == "worker":
-        cur.execute("UPDATE jobs SET worker_ended = 1 WHERE id = ? AND status = 'accepted' AND worker_ended = 0", (job_id,))
+        cur.execute("UPDATE jobs SET worker_ended = 1 WHERE id = ?", (job_id,))
         note = "Worker clicked End Job."
     else:
-        cur.execute("UPDATE jobs SET employer_ended = 1 WHERE id = ? AND status = 'accepted' AND employer_ended = 0", (job_id,))
+        cur.execute("UPDATE jobs SET employer_ended = 1 WHERE id = ?", (job_id,))
         note = "Employer clicked End Job."
 
-    if cur.rowcount == 1:
-        cur.execute(
-            """INSERT INTO job_messages (job_id, sender_role, sender_name, message, created_at)
-               VALUES (?, 'system', 'KaamSetu', ?, ?)""",
-            (job_id, note, datetime.now().strftime("%I:%M %p")),
-        )
-
-    finalized = try_finalize_job(cur, job_id)
+    cur.execute(
+        """INSERT INTO job_messages (job_id, sender_role, sender_name, message, created_at)
+           VALUES (?, 'system', 'KaamSetu', ?, ?)""",
+        (job_id, note, datetime.now().strftime("%I:%M %p")),
+    )
+    finalized = try_release_escrow_and_complete(cur, job_id)
     conn.commit()
     updated = enrich_job(dict(cur.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()), reveal_phone=True)
     conn.close()
 
-    msg = "Order completed & unlocked!" if finalized else f"{note} Waiting for remaining confirmation/payment verification."
+    msg = (
+        f"Job Completed! ₹{updated['worker_payout']} released from Escrow to worker's Wallet (5% platform fee: ₹{updated['platform_fee']})."
+        if finalized
+        else f"{note} Waiting for the other party to click End Job to auto-release Escrow."
+    )
     return jsonify({"job": updated, "completed": finalized, "message": msg}), 200
 
 

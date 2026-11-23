@@ -1,5 +1,4 @@
 window.KS = window.KS || {};
-KS.isListening = false;
 
 KS.showVoiceToast = function (text) {
   const toast = document.getElementById("voice-toast");
@@ -12,37 +11,29 @@ KS.showVoiceToast = function (text) {
 
 KS.startVoiceAssistant = function () {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    alert("Voice assistant requires Google Chrome.");
-    return;
-  }
+  if (!SR) return alert("Voice assistant requires Google Chrome.");
 
+  const meta = KS.LANG_META[KS.lang] || KS.LANG_META.hi;
   const btn = document.getElementById("floating-mic-btn");
   const rec = new SR();
-  rec.lang = "hi-IN";
+  rec.lang = meta.speech;
   rec.interimResults = false;
 
   rec.onstart = () => {
-    KS.isListening = true;
     btn.classList.add("animate-pulse", "bg-red-600");
     btn.classList.remove("bg-blue-600");
-    KS.showVoiceToast("सुन रहे हैं... बोलिए (जैसे: 'पैसे दिखाओ', 'काम सुनाओ', 'मदद')");
+    KS.showVoiceToast(`Listening (${meta.name})...`);
   };
 
   rec.onend = () => {
-    KS.isListening = false;
     btn.classList.remove("animate-pulse", "bg-red-600");
     btn.classList.add("bg-blue-600");
-  };
-
-  rec.onerror = () => {
-    KS.showVoiceToast("आवाज़ साफ़ नहीं आई, कृपया फिर से बोलें।");
   };
 
   rec.onresult = (e) => {
     const raw = e.results[0][0].transcript.trim();
     const cmd = raw.toLowerCase();
-    KS.showVoiceToast(`आपने कहा: "${raw}"`);
+    KS.showVoiceToast(`"${raw}"`);
     KS.handleVoiceCommand(cmd, raw);
   };
 
@@ -50,83 +41,48 @@ KS.startVoiceAssistant = function () {
 };
 
 KS.handleVoiceCommand = async function (cmd, raw) {
-  // 1. Emergency SOS
-  if (cmd.includes("madad") || cmd.includes("मदद") || cmd.includes("sos") || cmd.includes("बचाओ") || cmd.includes("hospital")) {
+  if (cmd.includes("madad") || cmd.includes("मदद") || cmd.includes("sos") || cmd.includes("help") || cmd.includes("hospital")) {
     KS.triggerSOS();
     return;
   }
-
-  // 2. Wallet / Balance
-  if (cmd.includes("wallet") || cmd.includes("वॉलेट") || cmd.includes("paise") || cmd.includes("पैसे") || cmd.includes("balance") || cmd.includes("बैलेंस")) {
+  if (cmd.includes("wallet") || cmd.includes("वॉलेट") || cmd.includes("paise") || cmd.includes("पैसे") || cmd.includes("balance")) {
     KS.switchPortalView("wallet");
     setTimeout(() => {
       const bal = document.getElementById("wallet-balance-amount")?.textContent || "0";
-      KS.speakHindi(`आपका वॉलेट बैलेंस ${bal} है।`);
+      KS.speak(`Your wallet balance is ${bal}`);
     }, 600);
     return;
   }
-
-  // 3. Profile
-  if (cmd.includes("profile") || cmd.includes("प्रोफाइल")) {
-    if (KS.user) {
-      KS.openProfileOnboarding(KS.user);
-      KS.speakHindi("आपकी प्रोफाइल खुल गई है।");
-    }
-    return;
-  }
-
-  // 4. Worker: Read available jobs aloud
-  if (cmd.includes("sunao") || cmd.includes("सुनाओ") || cmd.includes("kaam") || cmd.includes("काम") || cmd.includes("job")) {
+  if (cmd.includes("kaam") || cmd.includes("काम") || cmd.includes("job") || cmd.includes("sunao") || cmd.includes("सुनाओ")) {
     if (KS.user?.role === "worker") {
       KS.switchPortalView("worker-jobs");
       const { jobs } = await KS.api(`/api/jobs?worker_id=${KS.user.id}`);
-      if (!jobs.length) {
-        KS.speakHindi("अभी आपके काम के लिए कोई नया ऑर्डर नहीं है।");
-      } else {
-        const j = jobs[0];
-        KS.speakHindi(`सबसे नजदीकी काम: ${j.hindi_audio_text} इसे लेने के लिए नीला बटन दबाएं।`);
-      }
-      return;
-    } else if (KS.user?.role === "employer") {
-      KS.switchPortalView("employer-dashboard");
-      KS.speakHindi("आपका डैशबोर्ड खुल गया है।");
+      if (jobs.length) KS.speak(jobs[0].hindi_audio_text);
       return;
     }
   }
-
-  // 5. Otherwise, use speech to search jobs by area/name
-  const searchBox =
-    KS.user?.role === "employer"
-      ? document.getElementById("employer-search")
-      : document.getElementById("worker-search");
-
+  const searchBox = KS.user?.role === "employer" ? document.getElementById("employer-search") : document.getElementById("worker-search");
   if (searchBox) {
     searchBox.value = raw;
-    if (KS.user?.role === "employer") {
-      KS.switchPortalView("employer-dashboard");
-      KS.loadEmployerDashboard();
-    } else {
-      KS.switchPortalView("worker-jobs");
-      KS.loadWorkerDashboard();
-    }
-    KS.speakHindi(`${raw} के लिए काम खोजा जा रहा है।`);
+    if (KS.user?.role === "employer") KS.loadEmployerDashboard();
+    else KS.loadWorkerDashboard();
   }
 };
 
-// Voice-to-Text inside Private Chat (so workers don't have to type)
 KS.startChatVoice = function () {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return alert("Voice typing requires Google Chrome.");
+  const meta = KS.LANG_META[KS.lang] || KS.LANG_META.hi;
   const rec = new SR();
-  rec.lang = "hi-IN";
+  rec.lang = meta.speech;
   const input = document.getElementById("chat-input");
-  input.placeholder = "बोलिए... (Listening)";
+  input.placeholder = "Listening...";
   rec.onresult = (e) => {
     input.value = e.results[0][0].transcript;
-    input.placeholder = "Type a private message...";
+    input.placeholder = "Type or speak...";
   };
   rec.onend = () => {
-    input.placeholder = "Type a private message...";
+    input.placeholder = "Type or speak...";
   };
   rec.start();
 };

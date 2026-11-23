@@ -2,7 +2,7 @@ import io
 import os
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
-from database import AREAS, SKILLS, init_db
+from database import AREAS, PLATFORM_FEE_PERCENT, SKILLS, init_db
 from routes.auth import auth_bp
 from routes.jobs import jobs_bp
 from routes.sos import sos_bp
@@ -36,7 +36,11 @@ def serve_frontend():
 
 @app.route("/api/meta", methods=["GET"])
 def get_meta():
-    return jsonify({"areas": AREAS, "skills": SKILLS}), 200
+    return jsonify({
+        "areas": AREAS,
+        "skills": SKILLS,
+        "platform_fee_percent": PLATFORM_FEE_PERCENT,
+    }), 200
 
 
 @app.route("/api/tts", methods=["POST"])
@@ -46,12 +50,16 @@ def text_to_speech():
     except ImportError:
         return jsonify({"error": "gTTS not installed"}), 503
 
-    text = ((request.get_json(force=True) or {}).get("text") or "").strip()
+    payload = request.get_json(force=True) or {}
+    text = (payload.get("text") or "").strip()
+    lang = (payload.get("lang") or "hi").strip().lower()
+    if lang not in ("en", "hi", "mr", "bn", "ta", "pa"):
+        lang = "hi"
     if not text:
         return jsonify({"error": "Empty text"}), 400
     try:
         buf = io.BytesIO()
-        gTTS(text=text, lang="hi", slow=False).write_to_fp(buf)
+        gTTS(text=text, lang=lang, slow=False).write_to_fp(buf)
         buf.seek(0)
         return send_file(buf, mimetype="audio/mpeg")
     except Exception:
@@ -59,4 +67,5 @@ def text_to_speech():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host="0.0.0.0", port=port)

@@ -6,24 +6,18 @@ KS.loadWorkerDashboard = async function () {
   const { jobs, active_job, matched_skill } = await KS.api(`/api/jobs?worker_id=${KS.user.id}&q=${q}`);
 
   document.getElementById("worker-skill-banner").textContent =
-    `Showing ${matched_skill || KS.user.skill} jobs matched to your profile`;
+    `Showing ${matched_skill || KS.user.skill} jobs matched to your profile (Escrow Protected)`;
 
   KS.updateWorkerMapPins(active_job ? [active_job] : jobs);
 
   const activeBox = document.getElementById("active-job-banner");
   if (active_job) {
     activeBox.classList.remove("hidden");
-    const payStatusLabel = active_job.payment_verified
-      ? `Verified (${active_job.payment_method_used}${active_job.upi_ref_id ? " · " + active_job.upi_ref_id : ""})`
-      : active_job.payment_mode === "Cash"
-      ? "Pending Cash Confirmation"
-      : "Waiting for Employer UPI";
-
     activeBox.innerHTML = `
       <div class="active-order-card text-white rounded-3xl p-5 shadow-lg space-y-3">
         <div class="flex items-center justify-between">
           <span class="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-full">
-            Active Order #${active_job.id}
+            Escrow Locked · #${active_job.id}
           </span>
           <span class="text-xs font-bold text-amber-300">${active_job.duration_label}</span>
         </div>
@@ -31,7 +25,7 @@ KS.loadWorkerDashboard = async function () {
         <div>
           <h3 class="text-lg font-extrabold">${active_job.employer_name}</h3>
           <p class="text-xs text-slate-300 mt-0.5">${active_job.address} (${active_job.area})</p>
-          <p class="text-xs font-semibold text-emerald-300 mt-1">₹${active_job.pay_amount} (${active_job.payment_mode}) · Ph: ${active_job.display_phone}</p>
+          <p class="text-xs font-semibold text-emerald-300 mt-1">Your Payout: ₹${active_job.worker_payout} (after 5% fee) · Ph: ${active_job.display_phone}</p>
         </div>
 
         <div class="grid grid-cols-3 gap-2">
@@ -40,25 +34,16 @@ KS.loadWorkerDashboard = async function () {
           <a href="tel:${active_job.display_phone}" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl text-xs text-center">Call</a>
         </div>
 
-        <!-- 3-Step Completion Checklist -->
         <div class="bg-white/10 rounded-2xl p-3 space-y-1.5 text-[11px]">
-          <p class="font-bold uppercase text-slate-300 text-[10px]">Completion Checklist (All 3 required to unlock next job)</p>
+          <p class="font-bold uppercase text-slate-300 text-[10px]">Dual Confirmation (Releases ₹${active_job.worker_payout} to your Wallet)</p>
           <div class="flex justify-between"><span>1. You clicked End Job</span><span class="font-bold ${active_job.worker_ended ? "text-emerald-300" : "text-amber-300"}">${active_job.worker_ended ? "Done" : "Pending"}</span></div>
           <div class="flex justify-between"><span>2. Employer clicked End Job</span><span class="font-bold ${active_job.employer_ended ? "text-emerald-300" : "text-amber-300"}">${active_job.employer_ended ? "Done" : "Waiting"}</span></div>
-          <div class="flex justify-between"><span>3. Payment Verification</span><span class="font-bold ${active_job.payment_verified ? "text-emerald-300" : "text-amber-300"}">${payStatusLabel}</span></div>
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
-          <button onclick="KS.workerEndJob(${active_job.id})" ${active_job.worker_ended ? "disabled" : ""}
-            class="${active_job.worker_ended ? "bg-emerald-500/30 text-emerald-200 cursor-not-allowed" : "bg-white text-slate-900 hover:bg-slate-100"} font-extrabold py-2.5 rounded-xl text-xs">
-            ${active_job.worker_ended ? "Ended by You" : "End Job"}
-          </button>
-          ${
-            !active_job.payment_verified
-              ? `<button onclick="KS.workerConfirmCash(${active_job.id})" class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold py-2.5 rounded-xl text-xs">Payment Collected (Cash)</button>`
-              : `<button disabled class="bg-emerald-500/30 text-emerald-200 font-extrabold py-2.5 rounded-xl text-xs cursor-not-allowed">Payment Verified</button>`
-          }
-        </div>
+        <button onclick="KS.workerEndJob(${active_job.id})" ${active_job.worker_ended ? "disabled" : ""}
+          class="w-full ${active_job.worker_ended ? "bg-emerald-500/30 text-emerald-200 cursor-not-allowed" : "bg-white text-slate-900 hover:bg-slate-100"} font-extrabold py-2.5 rounded-xl text-xs">
+          ${active_job.worker_ended ? "Ended by You (Waiting for Employer)" : KS.t("end_job")}
+        </button>
       </div>
     `;
   } else {
@@ -80,7 +65,7 @@ KS.loadWorkerDashboard = async function () {
           <div>
             <div class="flex items-center gap-2">
               <h4 class="font-bold text-sm text-slate-900">${j.employer_name}</h4>
-              <span class="text-[10px] font-semibold uppercase bg-slate-100 text-slate-600 px-2 py-0.5 rounded">${j.employer_type}</span>
+              <span class="text-[10px] font-semibold uppercase bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">Escrow Paid</span>
             </div>
             <p class="text-xs text-slate-600 mt-1">${j.address}</p>
             <p class="text-[11px] text-slate-400 mt-0.5">${j.area} · ${j.distance_km} km · Ph: ${j.display_phone}</p>
@@ -89,17 +74,16 @@ KS.loadWorkerDashboard = async function () {
         </div>
 
         <div class="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold">
-          <span class="bg-slate-900 text-white px-2.5 py-1 rounded-lg">₹${j.pay_amount}</span>
+          <span class="bg-slate-900 text-white px-2.5 py-1 rounded-lg">You Get ₹${j.worker_payout}</span>
           <span class="bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg text-amber-800">${j.duration_label}</span>
-          <span class="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg text-emerald-700">${j.payment_mode}</span>
         </div>
 
         <div class="grid grid-cols-3 gap-2 mt-3.5">
-          <button onclick='KS.speakHindi(${JSON.stringify(j.hindi_audio_text)})' class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl text-xs">सुनें</button>
+          <button onclick='KS.speak(${JSON.stringify(j.hindi_audio_text)})' class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl text-xs">Audio</button>
           <a href="${j.maps_url}" target="_blank" rel="noopener" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl text-xs text-center">Route</a>
           <button onclick="KS.acceptJob(${j.id})" ${active_job ? "disabled" : ""}
             class="${active_job ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"} font-bold py-2.5 rounded-xl text-xs transition">
-            ${active_job ? "Finish Current" : "Accept Job"}
+            ${active_job ? "Finish Current" : KS.t("accept_job")}
           </button>
         </div>
       </div>
@@ -118,7 +102,7 @@ KS.acceptJob = async function (jobId) {
         worker_phone: KS.user.phone,
       }),
     });
-    KS.speakHindi(res.hindi_confirm);
+    KS.speak(res.hindi_confirm);
     KS.loadWorkerDashboard();
   } catch (err) {
     alert(err.message);
@@ -130,19 +114,6 @@ KS.workerEndJob = async function (jobId) {
     const res = await KS.api(`/api/jobs/${jobId}/end`, {
       method: "POST",
       body: JSON.stringify({ role: "worker" }),
-    });
-    alert(res.message);
-    KS.loadWorkerDashboard();
-  } catch (err) {
-    alert(err.message);
-  }
-};
-
-KS.workerConfirmCash = async function (jobId) {
-  try {
-    const res = await KS.api(`/api/jobs/${jobId}/confirm-cash`, {
-      method: "POST",
-      body: JSON.stringify({ worker_id: KS.user.id }),
     });
     alert(res.message);
     KS.loadWorkerDashboard();

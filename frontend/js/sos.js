@@ -10,7 +10,7 @@ KS.triggerSOS = function () {
     document.getElementById("sos-hospital-nav").href = data.nearest_hospital.maps_url;
     document.getElementById("sos-wa-link").href = data.family_whatsapp_url;
     document.getElementById("sos-modal").classList.remove("hidden");
-    KS.speakHindi(data.hindi_audio);
+    KS.speak(data.hindi_audio);
   };
 
   if (navigator.geolocation) {

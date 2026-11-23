@@ -7,13 +7,13 @@ KS.loadWallet = async function () {
 
   document.getElementById("wallet-balance-amount").textContent = `₹${data.wallet_balance}`;
   document.getElementById("wallet-subtitle").textContent = isWorker
-    ? "Withdrawable Online Balance (UPI Verified)"
-    : "Available KaamSetu Wallet / UPI Balance";
+    ? "Withdrawable Wallet Balance (Escrow Payouts)"
+    : "Available KaamSetu Escrow Wallet";
 
-  document.getElementById("wallet-stat-1-label").textContent = isWorker ? "Cash Collected" : "Paid in Cash";
-  document.getElementById("wallet-stat-1-val").textContent = `₹${data.cash_total}`;
-  document.getElementById("wallet-stat-2-label").textContent = isWorker ? "UPI Earned" : "Paid via UPI";
-  document.getElementById("wallet-stat-2-val").textContent = `₹${data.online_total}`;
+  document.getElementById("wallet-stat-1-label").textContent = isWorker ? "In Escrow (Active)" : "Held in Escrow";
+  document.getElementById("wallet-stat-1-val").textContent = `₹${data.escrow_held}`;
+  document.getElementById("wallet-stat-2-label").textContent = isWorker ? "Total Earned" : "Total Funded";
+  document.getElementById("wallet-stat-2-val").textContent = `₹${data.total_volume}`;
 
   document.getElementById("worker-withdraw-box").classList.toggle("hidden", !isWorker);
   document.getElementById("employer-topup-box").classList.toggle("hidden", isWorker);
@@ -26,11 +26,9 @@ KS.loadWallet = async function () {
 
   list.innerHTML = data.transactions
     .map((t) => {
-      const isPositive = ["credit", "topup", "cash_earned"].includes(t.tx_type);
+      const isPositive = ["credit", "topup"].includes(t.tx_type);
       const color = isPositive ? "text-emerald-600" : "text-slate-900";
       const sign = isPositive ? "+" : "-";
-      const badgeBg = t.payment_method === "Cash" ? "bg-amber-50 text-amber-800" : "bg-blue-50 text-blue-700";
-
       return `
         <div class="bg-white rounded-2xl p-3.5 border border-slate-200/80 flex items-center justify-between gap-3">
           <div>
@@ -39,7 +37,7 @@ KS.loadWallet = async function () {
           </div>
           <div class="text-right shrink-0">
             <p class="text-sm font-extrabold ${color}">${sign}₹${t.amount}</p>
-            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeBg}">${t.payment_method}</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">${t.payment_method}</span>
           </div>
         </div>
       `;
