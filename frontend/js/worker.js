@@ -101,7 +101,12 @@ KS.acceptJob = async function (jobId) {
         worker_phone: KS.user.phone,
       }),
     });
-    KS.speak(res.hindi_confirm);
+    const j = res.job;
+    if (KS.lang === "en") {
+      KS.speak(`Job accepted! ${j.worker_payout} rupees from ${j.employer_name} is safely locked in Shramvani Escrow.`);
+    } else {
+      KS.speak(`काम स्वीकार हो गया है। ${j.employer_name} के ${j.worker_payout} रुपये श्रमवाणी एस्क्रो में सुरक्षित हैं।`);
+    }
     KS.loadWorkerDashboard();
   } catch (err) {
     alert(err.message);

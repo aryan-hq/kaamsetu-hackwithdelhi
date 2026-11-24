@@ -143,16 +143,11 @@ KS.setLanguage = function (lang) {
   KS.lang = lang;
   localStorage.setItem("kaamsetu_lang", lang);
   document.querySelectorAll(".lang-picker").forEach((sel) => (sel.value = lang));
-  document.querySelectorAll("[data-i18n]").forEach((el) => {
-    const k = el.getAttribute("data-i18n");
-    el.textContent = KS.t(k);
-  });
-  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
-    const k = el.getAttribute("data-i18n-placeholder");
-    el.placeholder = KS.t(k);
-  });
-  if (KS.user) {
-    if (KS.user.role === "worker") KS.loadWorkerDashboard();
-    else KS.loadEmployerDashboard();
+
+  // Trigger Google Translate for 100% full-page translation
+  const combo = document.querySelector(".goog-te-combo");
+  if (combo) {
+    combo.value = lang;
+    combo.dispatchEvent(new Event("change"));
   }
 };

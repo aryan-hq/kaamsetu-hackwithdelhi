@@ -13,3 +13,5 @@ body {
 .wallet-card {
   background: linear-gradient(135deg, #111827 0%, #1E293B 65%, #065F46 100%);
 }
+.goog-te-banner-frame, .skiptranslate { display: none !important; }
+body { top: 0px !important; }

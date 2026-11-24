@@ -19,7 +19,7 @@ KS.setAuthMode = function (mode) {
         : "py-2 rounded-xl text-xs font-semibold text-slate-500";
   });
   document.getElementById("auth-submit-btn").textContent =
-    mode === "login" ? "Log In with Password" : "Create Account & Verify KYC";
+    mode === "login" ? "Log In with Password" : "Create Account";
 };
 
 KS.selectAuthRole = function (role) {
@@ -113,7 +113,7 @@ KS.openProfileOnboarding = function (user) {
   document.getElementById("app-shell").classList.add("hidden");
   document.getElementById("profile-setup-screen").classList.remove("hidden");
   document.getElementById("prof-role-label").textContent =
-    user.role === "worker" ? "Worker Profile & Face KYC" : "Employer Profile & Face KYC";
+    user.role === "worker" ? "Complete Worker Profile" : "Complete Employer Profile";
   document.getElementById("prof-name").value = user.name || "";
   document.getElementById("prof-phone").value = user.phone || "";
   document.getElementById("prof-skill-wrap").classList.toggle("hidden", user.role !== "worker");
