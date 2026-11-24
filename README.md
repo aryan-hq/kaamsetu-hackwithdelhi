@@ -201,6 +201,7 @@ Shramvani is configured for zero-cost deployment on **Render**:
 
 ## Team VYNTRIX
 Built with purpose for **HackWithDelhi 4.0**.
+Team Members : Aryan Yadav, Aayush, Rounak Sharma, Saurabh Sharma
 
 - **Repository:** [github.com/aryan-hq/shramvani-hackwithdelhi](https://github.com/aryan-hq/shramvani-hackwithdelhi)
 - **Live Prototype:** https://shramvani-hackwithdelhi.onrender.com/
