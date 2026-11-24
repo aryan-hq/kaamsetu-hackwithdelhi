@@ -281,16 +281,17 @@ KS.saveProfile = async function (e) {
     const { user } = await KS.api(`/api/auth/profile/${KS.user.id}`, {
       method: "POST",
       body: JSON.stringify({
-        name: document.getElementById("prof-name").value.trim(),
-        phone: document.getElementById("prof-phone").value.trim(),
-        skill: document.getElementById("prof-skill").value,
-        employer_type: document.getElementById("prof-emptype").value,
-        area: document.getElementById("prof-area").value,
+        name: document.getElementById("prof-name")?.value.trim() || "",
+        phone: document.getElementById("prof-phone")?.value.trim() || "",
+        skill: document.getElementById("prof-skill")?.value || "Electrician",
+        employer_type: document.getElementById("prof-emptype")?.value || "Shop",
+        area: document.getElementById("prof-area")?.value || "Laxmi Nagar",
       }),
     });
     KS.handleAuthenticatedUser(user);
   } catch (err) {
-    alert(err.message);
+    console.error("saveProfile error:", err);
+    alert(err.message || "Failed to save profile.");
   }
 };
 
