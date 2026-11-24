@@ -203,4 +203,4 @@ Shramvani is configured for zero-cost deployment on **Render**:
 Built with purpose for **HackWithDelhi 4.0**.
 
 - **Repository:** [github.com/aryan-hq/shramvani-hackwithdelhi](https://github.com/aryan-hq/shramvani-hackwithdelhi)
-- **Live Prototype:** `[https://shramvani-hackwithdelhi.onrender.com/]`
+- **Live Prototype:** https://shramvani-hackwithdelhi.onrender.com/
