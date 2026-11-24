@@ -118,7 +118,6 @@ KS.openProfileOnboarding = function (user) {
   document.getElementById("prof-phone").value = user.phone || "";
   document.getElementById("prof-skill-wrap").classList.toggle("hidden", user.role !== "worker");
   document.getElementById("prof-emptype-wrap").classList.toggle("hidden", user.role !== "employer");
-  document.getElementById("kyc-section").classList.toggle("hidden", Boolean(user.kyc_verified));
   if (user.skill) document.getElementById("prof-skill").value = user.skill;
   if (user.area) document.getElementById("prof-area").value = user.area;
 };
