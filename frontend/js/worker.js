@@ -79,8 +79,7 @@ KS.loadWorkerDashboard = async function () {
         </div>
 
         <div class="grid grid-cols-3 gap-2 mt-3.5">
-          <button onclick='KS.speak(${JSON.stringify(j.hindi_audio_text)})' class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl text-xs">Audio</button>
-          <a href="${j.maps_url}" target="_blank" rel="noopener" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl text-xs text-center">Route</a>
+          <button onclick='KS.speakJob(${JSON.stringify(j)})' class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl text-xs">Audio</button>          <a href="${j.maps_url}" target="_blank" rel="noopener" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-2.5 rounded-xl text-xs text-center">Route</a>
           <button onclick="KS.acceptJob(${j.id})" ${active_job ? "disabled" : ""}
             class="${active_job ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white"} font-bold py-2.5 rounded-xl text-xs transition">
             ${active_job ? "Finish Current" : KS.t("accept_job")}
@@ -119,5 +118,13 @@ KS.workerEndJob = async function (jobId) {
     KS.loadWorkerDashboard();
   } catch (err) {
     alert(err.message);
+  }
+};
+
+KS.speakJob = function (j) {
+  if (KS.lang === "en") {
+    KS.speak(`${j.skill} job at ${j.employer_name} in ${j.area}. Duration: ${j.duration_label}. You will receive ${j.worker_payout} rupees.`);
+  } else {
+    KS.speak(j.hindi_audio_text);
   }
 };

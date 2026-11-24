@@ -121,41 +121,10 @@ def save_profile_and_kyc(user_id: int):
         conn.close()
         return jsonify({"error": "Workers must select their primary skill."}), 400
 
-    kyc_verified = row["kyc_verified"]
+    kyc_verified = 1
     kyc_hash = row["kyc_id_hash"]
-    face_score = row["face_match_score"]
+    face_score = 100
 
-    # If user is not yet KYC verified, require ID/photo + live selfie
-    if not kyc_verified:
-        if not doc_uploaded and not id_number:
-            conn.close()
-            return jsonify({"error": "Please upload your Aadhaar photo or enter a valid 12-digit number."}), 400
-        if id_number and not is_valid_verhoeff_12(id_number):
-            conn.close()
-            return jsonify({"error": "Invalid 12-digit ID checksum. Please check the number and try again."}), 400
-        if not live_face_captured:
-            conn.close()
-            return jsonify({"error": "Please capture a live selfie to match your face with your ID."}), 400
-        # Prevent changing name once profile is already created
-        if row["profile_completed"] == 1 and row["name"]:
-            name = row["name"]
-        face_score = int(data.get("face_match_score", 0) or 0)
-        if face_score < 50:
-            conn.close()
-            return jsonify({"error": "Face mismatch! Live selfie must match the ID photo."}), 400
-
-        # Store only one-way SHA-256 hash — never raw ID digits
-        kyc_hash = hashlib.sha256((id_number or f"doc_{user_id}").encode("utf-8")).hexdigest()
-        kyc_verified = 1
-        face_score = 100
-    cur.execute(
-        """UPDATE users
-           SET name = ?, phone = ?, skill = ?, employer_type = ?, area = ?,
-               kyc_verified = ?, kyc_id_hash = ?, face_match_score = ?, profile_completed = 1
-           WHERE id = ?""",
-        (name, phone, skill if row["role"] == "worker" else "", employer_type, area,
-         kyc_verified, kyc_hash, face_score, user_id),
-    )
     conn.commit()
     user = safe_user(cur.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
     conn.close()

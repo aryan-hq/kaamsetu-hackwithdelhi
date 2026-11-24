@@ -8,7 +8,7 @@ KS.loadWallet = async function () {
   document.getElementById("wallet-balance-amount").textContent = `₹${data.wallet_balance}`;
   document.getElementById("wallet-subtitle").textContent = isWorker
     ? "Withdrawable Wallet Balance (Escrow Payouts)"
-    : "Available KaamSetu Escrow Wallet";
+    : "Available Shramvani Escrow Wallet";
 
   document.getElementById("wallet-stat-1-label").textContent = isWorker ? "In Escrow (Active)" : "Held in Escrow";
   document.getElementById("wallet-stat-1-val").textContent = `₹${data.escrow_held}`;

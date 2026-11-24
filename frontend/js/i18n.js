@@ -151,4 +151,8 @@ KS.setLanguage = function (lang) {
     const k = el.getAttribute("data-i18n-placeholder");
     el.placeholder = KS.t(k);
   });
+  if (KS.user) {
+    if (KS.user.role === "worker") KS.loadWorkerDashboard();
+    else KS.loadEmployerDashboard();
+  }
 };

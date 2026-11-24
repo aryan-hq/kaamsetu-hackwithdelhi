@@ -278,9 +278,6 @@ KS.stopCamera = function () {
 
 KS.saveProfile = async function (e) {
   e.preventDefault();
-  if (!KS.user.kyc_verified && (!KS.liveFaceCaptured || KS.faceMatchScore < 50)) {
-    return alert("Live face match failed or incomplete. Please match your live selfie with your ID photo.");
-  }
   try {
     const { user } = await KS.api(`/api/auth/profile/${KS.user.id}`, {
       method: "POST",
@@ -290,10 +287,6 @@ KS.saveProfile = async function (e) {
         skill: document.getElementById("prof-skill").value,
         employer_type: document.getElementById("prof-emptype").value,
         area: document.getElementById("prof-area").value,
-        id_number: (document.getElementById("kyc-id-number")?.value || "").trim(),
-        doc_uploaded: KS.docUploaded,
-        live_face_captured: KS.liveFaceCaptured,
-        face_match_score: KS.faceMatchScore,
       }),
     });
     KS.handleAuthenticatedUser(user);

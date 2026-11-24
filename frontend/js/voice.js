@@ -71,18 +71,39 @@ KS.handleVoiceCommand = async function (cmd, raw) {
 
 KS.startChatVoice = function () {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return alert("Voice typing requires Google Chrome.");
+  if (!SR) return alert("Voice typing is only supported in Google Chrome.");
+
   const meta = KS.LANG_META[KS.lang] || KS.LANG_META.hi;
+  const input = document.getElementById("chat-input");
   const rec = new SR();
   rec.lang = meta.speech;
-  const input = document.getElementById("chat-input");
-  input.placeholder = "Listening...";
-  rec.onresult = (e) => {
-    input.value = e.results[0][0].transcript;
-    input.placeholder = "Type or speak...";
+  rec.interimResults = false;
+  rec.continuous = false;
+
+  rec.onstart = () => {
+    input.placeholder = `Listening (${meta.name})... Speak now`;
   };
+
+  rec.onresult = (e) => {
+    const spoken = e.results[0][0].transcript;
+    input.value = input.value ? `${input.value} ${spoken}` : spoken;
+  };
+
+  rec.onerror = (e) => {
+    if (e.error === "not-allowed") {
+      alert("Microphone permission blocked. Click the lock icon in Chrome's address bar and allow Microphone.");
+    } else {
+      alert(`Mic error: ${e.error}. Please try speaking again.`);
+    }
+  };
+
   rec.onend = () => {
     input.placeholder = "Type or speak...";
   };
-  rec.start();
+
+  try {
+    rec.start();
+  } catch (err) {
+    alert("Mic is already active. Please wait a second and try again.");
+  }
 };
