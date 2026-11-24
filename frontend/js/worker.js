@@ -91,6 +91,18 @@ KS.loadWorkerDashboard = async function () {
     .join("");
 };
 
+KS.speakJob = function (j) {
+  const templates = {
+    en: `${j.skill} job at ${j.employer_name} in ${j.area}. Duration: ${j.duration_label}. You will receive ${j.worker_payout} rupees.`,
+    hi: `${j.area} में ${j.employer_name} पर ${j.skill} का काम है। समय: ${j.duration_label}। आपको ${j.worker_payout} रुपये मिलेंगे।`,
+    mr: `${j.area} मध्ये ${j.employer_name} येथे ${j.skill} चे काम आहे. वेळ: ${j.duration_label}. तुम्हाला ${j.worker_payout} रुपये मिळतील.`,
+    bn: `${j.area} তে ${j.employer_name} এ ${j.skill} এর কাজ আছে। সময়: ${j.duration_label}। আপনি ${j.worker_payout} টাকা পাবেন।`,
+    ta: `${j.area} பகுதியில் ${j.employer_name} இடத்தில் ${j.skill} வேலை உள்ளது. நேரம்: ${j.duration_label}. உங்களுக்கு ${j.worker_payout} ரூபாய் கிடைக்கும்.`,
+    pa: `${j.area} ਵਿੱਚ ${j.employer_name} ਵਿਖੇ ${j.skill} ਦਾ ਕੰਮ ਹੈ। ਸਮਾਂ: ${j.duration_label}। ਤੁਹਾਨੂੰ ${j.worker_payout} ਰੁਪਏ ਮਿਲਣਗੇ।`,
+  };
+  KS.speak(templates[KS.lang] || templates.en);
+};
+
 KS.acceptJob = async function (jobId) {
   try {
     const res = await KS.api(`/api/jobs/${jobId}/accept`, {
@@ -102,11 +114,15 @@ KS.acceptJob = async function (jobId) {
       }),
     });
     const j = res.job;
-    if (KS.lang === "en") {
-      KS.speak(`Job accepted! ${j.worker_payout} rupees from ${j.employer_name} is safely locked in Shramvani Escrow.`);
-    } else {
-      KS.speak(`काम स्वीकार हो गया है। ${j.employer_name} के ${j.worker_payout} रुपये श्रमवाणी एस्क्रो में सुरक्षित हैं।`);
-    }
+    const confirmTemplates = {
+      en: `Job accepted! ${j.worker_payout} rupees from ${j.employer_name} is safely locked in Shramvani Escrow.`,
+      hi: `काम स्वीकार हो गया है। ${j.employer_name} के ${j.worker_payout} रुपये श्रमवाणी एस्क्रो में सुरक्षित हैं।`,
+      mr: `काम स्वीकारले आहे. ${j.employer_name} चे ${j.worker_payout} रुपये श्रमवाणी एस्क्रो मध्ये सुरक्षित आहेत.`,
+      bn: `কাজ গৃহীত হয়েছে। ${j.employer_name} এর ${j.worker_payout} টাকা শ্রমবাণী এসক্রোতে সুরক্ষিত আছে।`,
+      ta: `வேலை ஏற்கப்பட்டது. ${j.employer_name} இன் ${j.worker_payout} ரூபாய் ஸ்ரம்வானி எஸ்க்ரோவில் பாதுகாப்பாக உள்ளது.`,
+      pa: `ਕੰਮ ਸਵੀਕਾਰ ਹੋ ਗਿਆ ਹੈ। ${j.employer_name} ਦੇ ${j.worker_payout} ਰੁਪਏ ਸ਼੍ਰਮਵਾਣੀ ਐਸਕ੍ਰੋ ਵਿੱਚ ਸੁਰੱਖਿਅਤ ਹਨ।`,
+    };
+    KS.speak(confirmTemplates[KS.lang] || confirmTemplates.en);
     KS.loadWorkerDashboard();
   } catch (err) {
     alert(err.message);
@@ -123,13 +139,5 @@ KS.workerEndJob = async function (jobId) {
     KS.loadWorkerDashboard();
   } catch (err) {
     alert(err.message);
-  }
-};
-
-KS.speakJob = function (j) {
-  if (KS.lang === "en") {
-    KS.speak(`${j.skill} job at ${j.employer_name} in ${j.area}. Duration: ${j.duration_label}. You will receive ${j.worker_payout} rupees.`);
-  } else {
-    KS.speak(j.hindi_audio_text);
   }
 };
