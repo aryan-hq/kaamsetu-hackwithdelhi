@@ -1,11 +1,9 @@
-import hashlib
 from datetime import datetime
 from flask import Blueprint, jsonify, request
 from database import (
     create_session_token,
     get_conn,
     hash_password,
-    is_valid_verhoeff_12,
     safe_user,
     verify_password,
 )
