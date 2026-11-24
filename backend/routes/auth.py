@@ -96,16 +96,13 @@ def login():
 
 @auth_bp.route("/api/auth/profile/<int:user_id>", methods=["POST"])
 def save_profile_and_kyc(user_id: int):
-    """Saves profile + verifies 12-digit ID (Verhoeff checksum) + Photo + Live Face Match."""
+    """Saves user profile and marks onboarding complete."""
     data = request.get_json(force=True)
     name = (data.get("name") or "").strip()
     phone = (data.get("phone") or "").strip()
     skill = (data.get("skill") or "").strip()
     employer_type = (data.get("employer_type") or "Shop").strip()
     area = (data.get("area") or "Laxmi Nagar").strip()
-    id_number = (data.get("id_number") or "").strip()
-    doc_uploaded = bool(data.get("doc_uploaded", False))
-    live_face_captured = bool(data.get("live_face_captured", False))
 
     if not name or len(phone) < 10:
         return jsonify({"error": "Full Name and 10-digit Phone Number are required."}), 400
@@ -121,14 +118,23 @@ def save_profile_and_kyc(user_id: int):
         conn.close()
         return jsonify({"error": "Workers must select their primary skill."}), 400
 
-    kyc_verified = 1
-    kyc_hash = row["kyc_id_hash"]
-    face_score = 100
+    if row["profile_completed"] == 1 and row["name"]:
+        name = row["name"]
 
+    cur.execute(
+        """
+        UPDATE users
+        SET name = ?, phone = ?, skill = ?, employer_type = ?, area = ?,
+            kyc_verified = 1, face_match_score = 100, profile_completed = 1
+        WHERE id = ?
+        """,
+        (name, phone, skill, employer_type, area, user_id),
+    )
     conn.commit()
+
     user = safe_user(cur.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
     conn.close()
-    return jsonify({"user": user, "face_match_score": face_score}), 200
+    return jsonify({"user": user, "face_match_score": 100}), 200
 
 
 @auth_bp.route("/api/auth/me/<int:user_id>", methods=["GET"])

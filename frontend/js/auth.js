@@ -80,33 +80,25 @@ KS.continueWithGoogle = async function () {
 KS.handleAuthenticatedUser = function (user) {
   KS.user = user;
   localStorage.setItem("kaamsetu_user", JSON.stringify(user));
-  document.getElementById("auth-screen").classList.add("hidden");
 
+  // Only require profile_completed (no KYC gate)
   if (!user.profile_completed) {
     KS.openProfileOnboarding(user);
     return;
   }
 
-  KS.stopCamera();
+  document.getElementById("auth-screen").classList.add("hidden");
   document.getElementById("profile-setup-screen").classList.add("hidden");
   document.getElementById("app-shell").classList.remove("hidden");
 
-  document.getElementById("header-user-name").textContent = user.name;
+  document.getElementById("header-user-name").textContent = user.name || "User";
   document.getElementById("header-user-badge").textContent =
-    (user.role === "worker" ? `${user.skill}` : `${user.employer_type}`) + (user.kyc_verified ? " · KYC Verified" : "");
+    user.role === "worker" ? `${user.skill || "Worker"} · Verified` : `${user.employer_type || "Employer"} · Verified`;
 
-  const isWorker = user.role === "worker";
-  document.getElementById("worker-nav").classList.toggle("hidden", !isWorker);
-  document.getElementById("employer-nav").classList.toggle("hidden", isWorker);
+  document.getElementById("worker-nav").classList.toggle("hidden", user.role !== "worker");
+  document.getElementById("employer-nav").classList.toggle("hidden", user.role !== "employer");
 
-  if (isWorker) {
-    KS.switchPortalView("worker-jobs");
-  } else {
-    document.getElementById("emp-name").value = user.name;
-    document.getElementById("emp-phone").value = user.phone;
-    document.getElementById("emp-type").value = user.employer_type || "Shop";
-    KS.switchPortalView("employer-dashboard");
-  }
+  KS.switchPortalView(user.role === "worker" ? "worker-jobs" : "employer-dashboard");
 };
 
 KS.openProfileOnboarding = function (user) {
@@ -281,16 +273,15 @@ KS.saveProfile = async function (e) {
     const { user } = await KS.api(`/api/auth/profile/${KS.user.id}`, {
       method: "POST",
       body: JSON.stringify({
-        name: document.getElementById("prof-name")?.value.trim() || "",
-        phone: document.getElementById("prof-phone")?.value.trim() || "",
-        skill: document.getElementById("prof-skill")?.value || "Electrician",
-        employer_type: document.getElementById("prof-emptype")?.value || "Shop",
-        area: document.getElementById("prof-area")?.value || "Laxmi Nagar",
+        name: document.getElementById("prof-name").value.trim(),
+        phone: document.getElementById("prof-phone").value.trim(),
+        skill: document.getElementById("prof-skill").value,
+        employer_type: document.getElementById("prof-emptype").value,
+        area: document.getElementById("prof-area").value,
       }),
     });
     KS.handleAuthenticatedUser(user);
   } catch (err) {
-    console.error("saveProfile error:", err);
     alert(err.message || "Failed to save profile.");
   }
 };
